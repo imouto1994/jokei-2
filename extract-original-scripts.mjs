@@ -11,7 +11,10 @@
  *       "Japanese text line here"
  *   ]
  *
- * Each extracted text line is written as a plain line in the output file.
+ * When a `#1-TEXT` entry is followed by anything other than `#1-SYS`
+ * (e.g. `#1-RETURN`, `#1-MENU_SET`, `#1-A_FLAG_SET`), the next `#1-TEXT`
+ * is a continuation and gets joined into the same line.
+ *
  * Files with no `#1-TEXT` entries are skipped.
  *
  * Usage:
@@ -49,31 +52,48 @@ async function main() {
     const text = sjisDecoder.decode(raw);
     const lines = text.split("\n");
 
-    // Step 4: Walk through lines, collecting text from #1-TEXT entries.
-    // Each entry has the structure:
-    //   #1-TEXT
-    //   [
-    //       "content"
-    //   ]
-    const extracted = [];
+    // Step 4: Collect TEXT entries with their positions and content.
+    const textEntries = [];
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].trim() !== "#1-TEXT") continue;
 
-      // The quoted string is on the line two positions after the header.
       const strLine = lines[i + 2] ? lines[i + 2].trim() : "";
       const match = strLine.match(/^"(.*)"$/);
-      if (match) {
-        extracted.push(match[1]);
-      }
+      if (!match) continue;
+
+      // Find the closing ] and check what command follows.
+      let j = i + 3;
+      while (j < lines.length && !lines[j].trim().startsWith("]")) j++;
+      j++;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      const nextCmd = j < lines.length ? lines[j].trim() : "";
+
+      textEntries.push({
+        content: match[1],
+        isContinuation: nextCmd !== "#1-SYS",
+      });
     }
 
-    // Step 5: Skip files that had no TEXT entries.
+    // Step 5: Join continuation entries (those followed by #1-RETURN)
+    // with the next entry to form complete lines.
+    const extracted = [];
+    let pending = "";
+    for (const entry of textEntries) {
+      pending += entry.content;
+      if (!entry.isContinuation) {
+        extracted.push(pending);
+        pending = "";
+      }
+    }
+    if (pending) extracted.push(pending);
+
+    // Step 6: Skip files that had no TEXT entries.
     if (extracted.length === 0) {
       skipped++;
       continue;
     }
 
-    // Step 6: Write extracted lines as UTF-8.
+    // Step 7: Write extracted lines as UTF-8.
     const outputPath = path.join(OUTPUT_DIR, fileName);
     await writeFile(outputPath, extracted.join("\n") + "\n", "utf-8");
     exported++;
