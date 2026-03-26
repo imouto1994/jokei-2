@@ -27,6 +27,7 @@ import path from "path";
 
 const INPUT_DIR = "original-script";
 const OUTPUT_FILE = "merged-original.txt";
+const JOINED_LINES_FILE = "joined-lines.txt";
 
 const SECTION_SEPARATOR = "--------------------";
 const HEADER_SEPARATOR = "********************";
@@ -88,15 +89,45 @@ async function main() {
   }
 
   const sections = [];
+  const allJoinedLines = [];
 
   for (const filePath of files) {
     // Step 2: Read each text file (already UTF-8).
     const fileName = path.basename(filePath, ".txt");
     const raw = await readFile(filePath, "utf-8");
-    const srcLines = raw.split("\n");
+    let srcLines = raw.split("\n");
     if (srcLines.at(-1) === "") srcLines.pop();
 
-    // Step 3: Convert each line.
+    // Step 3: In END files, join lines that don't end with sentence-ending
+    // punctuation, or that have an unclosed 「 bracket. These are display
+    // fragments that form a single sentence.
+    if (fileName.includes("-END")) {
+      const SENTENCE_ENDERS = new Set(["。", "！", "？", "…", "）", "」", "）", "》", "～"]);
+      const joined = [];
+      for (const line of srcLines) {
+        if (joined.length > 0) {
+          const prev = joined[joined.length - 1];
+          const hasUnclosedQuote =
+            prev.includes("「") && !prev.includes("」");
+          if (!SENTENCE_ENDERS.has(prev.slice(-1)) || hasUnclosedQuote) {
+            joined[joined.length - 1] += line;
+            continue;
+          }
+        }
+        joined.push(line);
+      }
+      // Track which lines were joined (differ from the original).
+      if (joined.length !== srcLines.length) {
+        for (const line of joined) {
+          if (!srcLines.includes(line)) {
+            allJoinedLines.push(`[${fileName}] ${line}`);
+          }
+        }
+      }
+      srcLines = joined;
+    }
+
+    // Step 4: Convert each line.
     // Inline speech (speaker「content」) is split into ＃{speaker} + content.
     // Everything else is kept as narration.
     const lines = [];
@@ -120,7 +151,13 @@ async function main() {
 
   console.log(`${files.length} files merged into ${OUTPUT_FILE}`);
 
-  // Step N: Split sections into line-limited chunks.
+  // Step 6: Write out the list of lines that were joined in END files.
+  if (allJoinedLines.length > 0) {
+    await writeFile(JOINED_LINES_FILE, allJoinedLines.join("\n") + "\n", "utf-8");
+    console.log(`${allJoinedLines.length} joined lines written to ${JOINED_LINES_FILE}`);
+  }
+
+  // Step 7: Split sections into line-limited chunks.
   await rm(CHUNKS_DIR, { recursive: true, force: true });
   await mkdir(CHUNKS_DIR, { recursive: true });
 
