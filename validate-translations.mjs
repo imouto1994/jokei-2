@@ -39,7 +39,8 @@ function lineType(line, isTranslated) {
     return "source";
 
   if (isTranslated) {
-    if (line.startsWith("\u201C") && line.endsWith("\u201D")) return "speech-quote";
+    if (line.startsWith("\u201C") && line.endsWith("\u201D"))
+      return "speech-quote";
     if (line.startsWith('"') && line.endsWith('"')) return "speech-quote";
     if (line.startsWith("(") && line.endsWith(")")) return "speech-paren";
     if (line.startsWith("[") && line.endsWith("]")) return "speech-bracket";
@@ -62,7 +63,7 @@ const SPEAKER_MAP = new Map([
   ["千里", "Chisato"],
   ["祥子", "Shouko"],
   ["潮", "Ushio"],
-  ["蟇田", "Hikida"],
+  ["蟇田", "Hikita"],
   ["相馬", "Souma"],
   ["？？？", "???"],
   ["従業員Ａ", "Employee A"],
@@ -91,7 +92,10 @@ async function parseSectionsFromChunks(dir) {
     let i = 0;
     while (i < allLines.length) {
       // Scan for the next section separator.
-      if (allLines[i] !== SECTION_SEPARATOR) { i++; continue; }
+      if (allLines[i] !== SECTION_SEPARATOR) {
+        i++;
+        continue;
+      }
 
       const sectionStartLine = i + 1; // 1-indexed
       i++; // skip separator
@@ -136,7 +140,12 @@ async function main() {
 
   // Step 2: Validate each original section against its translated counterpart.
   for (const [fileName, origEntry] of origSections) {
-    const { lines: origLines, lineNos: origLineNos, chunkPath: origChunk, startLine: origStart } = origEntry;
+    const {
+      lines: origLines,
+      lineNos: origLineNos,
+      chunkPath: origChunk,
+      startLine: origStart,
+    } = origEntry;
 
     // Step 2a: Check that the translated chunks have a matching section.
     if (!transSections.has(fileName)) {
@@ -150,7 +159,12 @@ async function main() {
 
     checked++;
     const transEntry = transSections.get(fileName);
-    const { lines: transLines, lineNos: transLineNos, chunkPath: transChunk, startLine: transStart } = transEntry;
+    const {
+      lines: transLines,
+      lineNos: transLineNos,
+      chunkPath: transChunk,
+      startLine: transStart,
+    } = transEntry;
     const sectionErrors = [];
     let firstErrorLineIdx = -1;
 
@@ -208,10 +222,14 @@ async function main() {
 
     if (sectionErrors.length > 0) {
       mismatched++;
-      const origErrLine = firstErrorLineIdx >= 0 && origLineNos[firstErrorLineIdx]
-        ? origLineNos[firstErrorLineIdx] : origStart;
-      const transErrLine = firstErrorLineIdx >= 0 && transLineNos[firstErrorLineIdx]
-        ? transLineNos[firstErrorLineIdx] : transStart;
+      const origErrLine =
+        firstErrorLineIdx >= 0 && origLineNos[firstErrorLineIdx]
+          ? origLineNos[firstErrorLineIdx]
+          : origStart;
+      const transErrLine =
+        firstErrorLineIdx >= 0 && transLineNos[firstErrorLineIdx]
+          ? transLineNos[firstErrorLineIdx]
+          : transStart;
       errors.push({
         header: `✗  ${origChunk}:${origErrLine} | ${transChunk}:${transErrLine} > ${fileName}`,
         details: sectionErrors.map((e) => `   ${e}`),
